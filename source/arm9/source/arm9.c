@@ -1,14 +1,13 @@
 #include <nds.h>
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
 
 #include <fat.h>
 #include <dirent.h>
-
+#include <string.h>
 #include "../../fwfifo.h"
 
-#define OK_TO_DO_SOME_POTENTIALLY_DANGEROUS_STUFF 0
+#define OK_TO_DO_SOME_POTENTIALLY_DANGEROUS_STUFF 1
 
 #if 0
 u16 crc16_table[0x100] = {0}; /* not proper table */
@@ -114,7 +113,7 @@ int verifying(void)
 		firmware_read(offset, fw_work_buffer, WORK_SIZE);
 		if (memcmp(fw_work_buffer, fw_buffer + offset, WORK_SIZE))
 		{
-			iprintf("  >> VERIFY ERROR\n");
+			iprintf("\n  >> VERIFY ERROR\n");
 			WAIT_FOR_BUTTON_PRESS(KEY_A);
 			/* call svc 5 */
 			return -1;
@@ -154,14 +153,14 @@ int patches2_len = 0x28;
 void ClearScreen(void) { iprintf("\x1B[2J"); }
 inline void INIT(void) { consoleDemoInit(); }
 
-void dumpSettingsToFile()
+void dumpBufferToFile(char filename[], void* buffer)
 {
 	if (fatInitDefault())
 	{
-		FILE* file = fopen("settings.bin", "wb");
+		FILE* file = fopen(filename, "wb");
 		if(file)
 		{
-			if(fwrite(fw_buffer, sizeof(u8), FW_SIZE, file) == FW_SIZE)
+			if(fwrite(buffer, 1, FW_SIZE, file) == FW_SIZE)
 			{
 				iprintf("Wrote profile settings to file\n");
 			}
@@ -212,8 +211,8 @@ int main(int argc, char ** argv)
 	if (key & KEY_B) return EXIT_FAILURE;
 
 	firmware_read(0, fw_buffer, FW_SIZE);
-	dumpSettingsToFile();
-	printCRCs();
+	dumpBufferToFile("settings.bin", fw_buffer);
+	//printCRCs();
 	/* DON'T GO PAST HERE WITHOUT VERIFYING READ WORKS */
 #if OK_TO_DO_SOME_POTENTIALLY_DANGEROUS_STUFF
 	memcpy(fw_buffer + 0x1FE00, patches1, patches1_len); /* UserSettings 1 */
@@ -227,12 +226,16 @@ int main(int argc, char ** argv)
 	*(u16*)(fw_buffer + 0x1FEFE) = swiCRC16(0xFFFF, fw_buffer+0x1FE74, 0x8A); /* 74h - FDh (1) */
 	*(u16*)(fw_buffer + 0x1FF72) = swiCRC16(0xFFFF, fw_buffer+0x1FF00, 0x70); /* 00h - 6Fh (2) */
 	*(u16*)(fw_buffer + 0x1FFFE) = swiCRC16(0xFFFF, fw_buffer+0x1FF74, 0x8A); /* 74h - FDh (2) */
-
+	dumpBufferToFile("settingsPatchedMemory.bin", fw_buffer);
+	
 	programming();
+	firmware_read(0, fw_buffer, FW_SIZE);
+	dumpBufferToFile("settingsProgrammed.bin", fw_buffer);
 	if (verifying() < 0)
 	{
 		return EXIT_FAILURE;
 	}
+
 	iprintf("  ** DONE! ENJOY FAKEWAY! **\n");
 #endif
 	iprintf("  >> PRESS (A) TO EXIT\n");
