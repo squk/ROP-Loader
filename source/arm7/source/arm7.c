@@ -30,47 +30,38 @@ u16 spiFwReadSr(void)
 
 void spiFwWriteOrProgram(u16 cmd, u32 offset, u8 * buffer, int size)
 {
+
 	int oldIME = enterCriticalSection();
 	SerialWaitBusy();
 	REG_SPICNT  = SPI_ENABLE | SPI_DEVICE_FIRMWARE | SPI_BYTE_MODE | SPI_BAUD_4MHz;
 	REG_SPIDATA = FIRMWARE_WREN;
 	SerialWaitBusy();
-	SerialDrainData();
-	SerialWaitBusy();
+
 	REG_SPICNT  = SPI_ENABLE | SPI_DEVICE_FIRMWARE | SPI_CONTINUOUS | SPI_BYTE_MODE | SPI_BAUD_4MHz;
 	REG_SPIDATA = cmd;
 	SerialWaitBusy();
-	SerialDrainData();
+
+	REG_SPIDATA = (offset>>16) & 0xFF;
 	SerialWaitBusy();
-	REG_SPICNT  = SPI_ENABLE | SPI_DEVICE_FIRMWARE | SPI_CONTINUOUS | SPI_BYTE_MODE | SPI_BAUD_4MHz;
-	REG_SPIDATA = offset&0x00FF0000 >> 16;
+	REG_SPIDATA = (offset>>8) & 0xFF;
 	SerialWaitBusy();
-	SerialDrainData();
+	REG_SPIDATA = (offset>>0) & 0xFF;
 	SerialWaitBusy();
-	REG_SPICNT  = SPI_ENABLE | SPI_DEVICE_FIRMWARE | SPI_CONTINUOUS | SPI_BYTE_MODE | SPI_BAUD_4MHz;
-	REG_SPIDATA = offset&0x0000FF00 >>  8;
-	SerialWaitBusy();
-	SerialDrainData();
-	SerialWaitBusy();
-	REG_SPICNT  = SPI_ENABLE | SPI_DEVICE_FIRMWARE | SPI_CONTINUOUS | SPI_BYTE_MODE | SPI_BAUD_4MHz;
-	REG_SPIDATA = offset&0x000000FF >>  0;
-	SerialWaitBusy();
-	SerialDrainData();
+
+
 	if ((cmd == FIRMWARE_PP || cmd == FIRMWARE_PW) && (size != 0))
 	{
 		u32 ctr = 0;
 		do
 		{
-			u8 byte = buffer[ctr];
-			SerialWaitBusy();
 			REG_SPICNT  = (ctr == size-1) ? (SPI_ENABLE|SPI_DEVICE_FIRMWARE | SPI_BYTE_MODE | SPI_BAUD_4MHz) : (SPI_ENABLE | SPI_DEVICE_FIRMWARE | SPI_CONTINUOUS | SPI_BYTE_MODE | SPI_BAUD_4MHz);
-			REG_SPIDATA = byte;
+			REG_SPIDATA = buffer[ctr];
 			SerialWaitBusy();
-			SerialDrainData();
 		} while (++ctr != size);
 	}
 
 	while (spiFwReadSr() & 1) ;
+	REG_SPICNT = 0;
 	leaveCriticalSection(oldIME);
 }
 
