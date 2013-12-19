@@ -3,6 +3,9 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include <fat.h>
+#include <dirent.h>
+
 #include "../../fwfifo.h"
 
 #define OK_TO_DO_SOME_POTENTIALLY_DANGEROUS_STUFF 0
@@ -150,10 +153,40 @@ int patches2_len = 0x28;
 
 void ClearScreen(void) { iprintf("\x1B[2J"); }
 inline void INIT(void) { consoleDemoInit(); }
+
+void dumpSettingsToFile()
+{
+	if (fatInitDefault())
+	{
+		FILE* file = fopen("settings.bin", "wb");
+		if(file)
+		{
+			if(fwrite(fw_buffer, sizeof(u8), FW_SIZE, file) == FW_SIZE)
+			{
+				iprintf("Wrote profile settings to file\n");
+			}
+			else
+			{
+				iprintf("Write failed\n");
+			}
+			fclose(file);
+		}
+		else
+		{
+			iprintf("fopen failed\n");
+		}
+	}
+	else
+	{
+		iprintf("fatInitDefault failure: terminating\n");
+	}
+}
+
 int main(int argc, char ** argv)
 {
 	void * uncached = memUncached(fw_buffer);
 	memset(uncached, 0, FW_SIZE);
+
 	INIT(); /* needs to setup console and fifo/ipc and buttons */
 	ClearScreen();
 
@@ -164,6 +197,9 @@ int main(int argc, char ** argv)
 	if (key & KEY_B) return EXIT_FAILURE;
 
 	firmware_read(0, fw_buffer, FW_SIZE);
+	dumpSettingsToFile();
+	
+
 	/* DON'T GO PAST HERE WITHOUT VERIFYING READ WORKS */
 #if OK_TO_DO_SOME_POTENTIALLY_DANGEROUS_STUFF
 	memcpy(fw_buffer + 0x1FE00, patches1, patches1_len); /* UserSettings 1 */
@@ -184,9 +220,9 @@ int main(int argc, char ** argv)
 		return EXIT_FAILURE;
 	}
 	iprintf("  ** DONE! ENJOY FAKEWAY! **\n");
+#endif
 	iprintf("  >> PRESS (A) TO EXIT\n");
 	WAIT_FOR_BUTTON_PRESS(KEY_A);
-#endif
 	return 0;
 }
 
