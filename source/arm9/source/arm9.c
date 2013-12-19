@@ -63,6 +63,7 @@ void fwSendMsg(int which, int offset, void* buffer, int size)
 
 #define FW_SIZE 0x20000
 u8 fw_buffer[FW_SIZE];
+u8 fw_buffer_cmp[FW_SIZE];
 #define WORK_SIZE 0x20
 u8 fw_work_buffer[WORK_SIZE];
 
@@ -89,6 +90,34 @@ void firmware_send_msg7(u8 cmd)
 	fwSendMsg(FwFoo, 0, fw_work_buffer, 1);
 }
 
+void dumpBufferToFile(char filename[], void* buffer, int size)
+{
+	if (fatInitDefault())
+	{
+		FILE* file = fopen(filename, "wb");
+		if(file)
+		{
+			if(fwrite(buffer, 1, size, file) == size)
+			{
+				iprintf("  >> WROTE TO %s\n", filename);
+			}
+			else
+			{
+				iprintf("WRITE FAILED\n");
+			}
+			fclose(file);
+		}
+		else
+		{
+			iprintf("fopen failed\n");
+		}
+	}
+	else
+	{
+		iprintf("fatInitDefault failure: terminating\n");
+	}
+}
+
 void programming(void)
 {
 	memset(memUncached(fw_work_buffer), 0, WORK_SIZE);
@@ -105,20 +134,21 @@ void programming(void)
 
 int verifying(void)
 {
-	memset(memUncached(fw_work_buffer), 0, WORK_SIZE);
+	memset(memUncached(fw_buffer_cmp), 0, FW_SIZE);
 	int offset = 0;
 	iprintf("  >> VERIFYING [");
 	do
 	{
-		firmware_read(offset, fw_work_buffer, WORK_SIZE);
-		if (memcmp(fw_work_buffer, fw_buffer + offset, WORK_SIZE))
+		firmware_read(offset, fw_buffer_cmp, FW_SIZE);
+		if (memcmp(fw_buffer_cmp, fw_buffer + offset, FW_SIZE))
 		{
 			iprintf("\n  >> VERIFY ERROR\n");
+			iprintf("  >> PRESS (A) TO EXIT\n");
 			WAIT_FOR_BUTTON_PRESS(KEY_A);
 			/* call svc 5 */
 			return -1;
 		}
-		offset += WORK_SIZE;
+		offset += FW_SIZE;
 	} while (offset != FW_SIZE);
 	iprintf("]\n");
 	iprintf("  >> OK!\n");
@@ -153,34 +183,6 @@ int patches2_len = 0x28;
 void ClearScreen(void) { iprintf("\x1B[2J"); }
 inline void INIT(void) { consoleDemoInit(); }
 
-void dumpBufferToFile(char filename[], void* buffer)
-{
-	if (fatInitDefault())
-	{
-		FILE* file = fopen(filename, "wb");
-		if(file)
-		{
-			if(fwrite(buffer, 1, FW_SIZE, file) == FW_SIZE)
-			{
-				iprintf("Wrote profile settings to file\n");
-			}
-			else
-			{
-				iprintf("Write failed\n");
-			}
-			fclose(file);
-		}
-		else
-		{
-			iprintf("fopen failed\n");
-		}
-	}
-	else
-	{
-		iprintf("fatInitDefault failure: terminating\n");
-	}
-}
-
 void printCRCs()
 {
 	iprintf("OrgCRC1 : %x \n", *(u16*)(fw_buffer + 0x1FE72));
@@ -200,18 +202,22 @@ int main(int argc, char ** argv)
 {
 	void * uncached = memUncached(fw_buffer);
 	memset(uncached, 0, FW_SIZE);
+	int i;
+	for(i=0;i<FW_SIZE;i++)
+	{
+		fw_buffer[i] = 0xFF;
+	}
 
 	INIT(); /* needs to setup console and fifo/ipc and buttons */
 	ClearScreen();
 
-	iprintf("\n\n  >> FAKEWAY 3DS INSTALLER\n\n");
+	iprintf("\n\n  >> ROP Loader 3DS INSTALLER\n\n");
 	iprintf("  >> PRESS (A) TO INSTALL\n");
 	iprintf("  >> PRESS (B) TO EXIT\n");
 	int key = WAIT_FOR_BUTTON_PRESS(KEY_A|KEY_B);
 	if (key & KEY_B) return EXIT_FAILURE;
-
 	firmware_read(0, fw_buffer, FW_SIZE);
-	dumpBufferToFile("settings.bin", fw_buffer);
+	//dumpBufferToFile("initRead.bin", fw_buffer, sizeof fw_buffer);
 	//printCRCs();
 	/* DON'T GO PAST HERE WITHOUT VERIFYING READ WORKS */
 #if OK_TO_DO_SOME_POTENTIALLY_DANGEROUS_STUFF
@@ -226,17 +232,16 @@ int main(int argc, char ** argv)
 	*(u16*)(fw_buffer + 0x1FEFE) = swiCRC16(0xFFFF, fw_buffer+0x1FE74, 0x8A); /* 74h - FDh (1) */
 	*(u16*)(fw_buffer + 0x1FF72) = swiCRC16(0xFFFF, fw_buffer+0x1FF00, 0x70); /* 00h - 6Fh (2) */
 	*(u16*)(fw_buffer + 0x1FFFE) = swiCRC16(0xFFFF, fw_buffer+0x1FF74, 0x8A); /* 74h - FDh (2) */
-	dumpBufferToFile("settingsPatchedMemory.bin", fw_buffer);
-	
+	//dumpBufferToFile("mempatch.bin", fw_buffer, sizeof fw_buffer);
 	programming();
 	firmware_read(0, fw_buffer, FW_SIZE);
-	dumpBufferToFile("settingsProgrammed.bin", fw_buffer);
+	//dumpBufferToFile("afterPRead.bin", fw_buffer, sizeof fw_buffer);
 	if (verifying() < 0)
 	{
 		return EXIT_FAILURE;
 	}
 
-	iprintf("  ** DONE! ENJOY FAKEWAY! **\n");
+	iprintf("  ** DONE! ENJOY YOUR 3DS! **\n");
 #endif
 	iprintf("  >> PRESS (A) TO EXIT\n");
 	WAIT_FOR_BUTTON_PRESS(KEY_A);
