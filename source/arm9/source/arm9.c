@@ -182,6 +182,21 @@ void dumpSettingsToFile()
 	}
 }
 
+void printCRCs()
+{
+	iprintf("OrgCRC1 : %x \n", *(u16*)(fw_buffer + 0x1FE72));
+	iprintf("GenCRC1 : %x \n\n", swiCRC16(0xFFFF, fw_buffer+0x1FE00, 0x70));
+
+	iprintf("OrgCRC2 : %x \n", *(u16*)(fw_buffer + 0x1FEFE));
+	iprintf("GenCRC2 : %x \n\n", swiCRC16(0xFFFF, fw_buffer+0x1FE74, 0x8A));
+
+	iprintf("OrgCRC3 : %x \n", *(u16*)(fw_buffer + 0x1FF72));
+	iprintf("GenCRC3 : %x \n\n", swiCRC16(0xFFFF, fw_buffer+0x1FF00, 0x70));
+
+	iprintf("OrgCRC4 : %x \n", *(u16*)(fw_buffer + 0x1FFFE));
+	iprintf("GenCRC4 : %x \n\n", swiCRC16(0xFFFF, fw_buffer+0x1FF74, 0x8A));
+}
+
 int main(int argc, char ** argv)
 {
 	void * uncached = memUncached(fw_buffer);
@@ -198,8 +213,7 @@ int main(int argc, char ** argv)
 
 	firmware_read(0, fw_buffer, FW_SIZE);
 	dumpSettingsToFile();
-	
-
+	printCRCs();
 	/* DON'T GO PAST HERE WITHOUT VERIFYING READ WORKS */
 #if OK_TO_DO_SOME_POTENTIALLY_DANGEROUS_STUFF
 	memcpy(fw_buffer + 0x1FE00, patches1, patches1_len); /* UserSettings 1 */
