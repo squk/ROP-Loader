@@ -136,21 +136,17 @@ int verifying(void)
 {
 	memset(memUncached(fw_buffer_cmp), 0, FW_SIZE);
 	int offset = 0;
-	iprintf("  >> VERIFYING [");
-	do
+	iprintf("  >> VERIFYING...\n");
+
+	firmware_read(offset, fw_buffer_cmp, FW_SIZE);
+	if (memcmp(fw_buffer_cmp, fw_buffer + offset, FW_SIZE))
 	{
-		firmware_read(offset, fw_buffer_cmp, FW_SIZE);
-		if (memcmp(fw_buffer_cmp, fw_buffer + offset, FW_SIZE))
-		{
-			iprintf("\n  >> VERIFY ERROR\n");
-			iprintf("  >> PRESS (A) TO EXIT\n");
-			WAIT_FOR_BUTTON_PRESS(KEY_A);
-			/* call svc 5 */
-			return -1;
-		}
-		offset += FW_SIZE;
-	} while (offset != FW_SIZE);
-	iprintf("]\n");
+		iprintf("\n  >> VERIFY ERROR\n");
+		iprintf("  >> PRESS (A) TO EXIT\n");
+		WAIT_FOR_BUTTON_PRESS(KEY_A);
+		/* call svc 5 */
+		return -1;
+	}
 	iprintf("  >> OK!\n");
 	return 0;
 }
