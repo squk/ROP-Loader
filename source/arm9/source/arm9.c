@@ -213,9 +213,7 @@ int main(int argc, char ** argv)
 	int key = WAIT_FOR_BUTTON_PRESS(KEY_A|KEY_B);
 	if (key & KEY_B) return EXIT_FAILURE;
 	firmware_read(0, fw_buffer, FW_SIZE);
-	//dumpBufferToFile("initRead.bin", fw_buffer, sizeof fw_buffer);
-	//printCRCs();
-	/* DON'T GO PAST HERE WITHOUT VERIFYING READ WORKS */
+
 #if OK_TO_DO_SOME_POTENTIALLY_DANGEROUS_STUFF
 	memcpy(fw_buffer + 0x1FE00, patches1, patches1_len); /* UserSettings 1 */
 	*(u16*)(fw_buffer + 0x1FE70) = 0x51; /* update_counter UserSettings 1 */
@@ -228,10 +226,8 @@ int main(int argc, char ** argv)
 	*(u16*)(fw_buffer + 0x1FEFE) = swiCRC16(0xFFFF, fw_buffer+0x1FE74, 0x8A); /* 74h - FDh (1) */
 	*(u16*)(fw_buffer + 0x1FF72) = swiCRC16(0xFFFF, fw_buffer+0x1FF00, 0x70); /* 00h - 6Fh (2) */
 	*(u16*)(fw_buffer + 0x1FFFE) = swiCRC16(0xFFFF, fw_buffer+0x1FF74, 0x8A); /* 74h - FDh (2) */
-	//dumpBufferToFile("mempatch.bin", fw_buffer, sizeof fw_buffer);
 	programming();
 	firmware_read(0, fw_buffer, FW_SIZE);
-	//dumpBufferToFile("afterPRead.bin", fw_buffer, sizeof fw_buffer);
 	if (verifying() < 0)
 	{
 		return EXIT_FAILURE;
