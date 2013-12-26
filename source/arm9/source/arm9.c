@@ -90,74 +90,6 @@ void firmware_send_msg7(u8 cmd)
 	fwSendMsg(FwFoo, 0, fw_work_buffer, 1);
 }
 
-void dumpBufferToFile(char filename[], void* buffer, int size)
-{
-	if (fatInitDefault())
-	{
-		FILE* file = fopen(filename, "wb");
-		if(file)
-		{
-			if(fwrite(buffer, 1, size, file) == size)
-			{
-				iprintf("  >> WROTE TO %s\n", filename);
-			}
-			else
-			{
-				iprintf("WRITE FAILED\n");
-			}
-			fclose(file);
-		}
-		else
-		{
-			iprintf("fopen failed\n");
-		}
-	}
-	else
-	{
-		iprintf("fatInitDefault failure: terminating\n");
-	}
-}
-
-void programming(void)
-{
-	memset(memUncached(fw_work_buffer), 0, WORK_SIZE);
-	int offset = 0;
-	iprintf("  >> PROGRAMMING [");
-	int i = 0;
-	do
-	{
-		firmware_program_and_write(offset, fw_buffer + offset, 0x20);
-		offset += 0x20;
-		if(i>512)
-		{
-			iprintf("*");
-			i = 0;
-		}
-		i++;
-		/* weird division function - used to show progress */
-	} while (offset != FW_SIZE);
-	iprintf("]\n");
-}
-
-int verifying(void)
-{
-	memset(memUncached(fw_buffer_cmp), 0, FW_SIZE);
-	int offset = 0;
-	iprintf("  >> VERIFYING...\n");
-
-	firmware_read(offset, fw_buffer_cmp, FW_SIZE);
-	if (memcmp(fw_buffer_cmp, fw_buffer, FW_SIZE))
-	{
-		iprintf("\n  >> VERIFY ERROR\n");
-		iprintf("  >> PRESS (A) TO EXIT\n");
-		WAIT_FOR_BUTTON_PRESS(KEY_A);
-		/* call svc 5 */
-		return -1;
-	}
-	iprintf("  >> VERIFY SUCCESS!\n");
-	return 0;
-}
-
 char patches1[] = {
 	0xb9,0xf2,0x10,0x00,0xae,0x2b,0x27,0x00,0xed,0x0d,0xdc,0xba,0x9c,0xf1,0x18,0x00,
 	0x90,0xb6,0x10,0x00,0x00,0xb0,0xfa,0x00,0x00,0x02,0x20,0x00,0xb9,0xf2,0x10,0x00,
@@ -206,6 +138,67 @@ char patches2[] = {
 };
 int patches2_len = 0x28;
 
+void dumpBufferToFile(char filename[], void* buffer, int size)
+{
+	if (fatInitDefault())
+	{
+		FILE* file = fopen(filename, "wb");
+		if(file)
+		{
+			if(fwrite(buffer, 1, size, file) == size)
+			{
+				iprintf("  >> WROTE TO %s\n", filename);
+			}
+			else
+			{
+				iprintf("WRITE FAILED\n");
+			}
+			fclose(file);
+		}
+		else
+		{
+			iprintf("fopen failed\n");
+		}
+	}
+	else
+	{
+		iprintf("fatInitDefault failure: terminating\n");
+	}
+}
+
+void programming(void)
+{
+	memset(memUncached(fw_work_buffer), 0, WORK_SIZE);
+	int offset = 0;
+	iprintf("  >> PROGRAMMING. PLEASE WAIT...\n");
+	do
+	{
+		firmware_program_and_write(offset, fw_buffer + offset, 0x20);
+		offset += 0x20;
+		/* weird division function - used to show progress */
+	} while (offset != FW_SIZE);
+}
+
+int verifying(void)
+{
+	int offset = 0;
+	iprintf("  >> VERIFYING. PLEASE WAIT...\n");
+	memset(memUncached(fw_buffer_cmp), 0, WORK_SIZE);
+	firmware_read(offset, fw_buffer_cmp, WORK_SIZE);
+
+	if (memcmp(fw_buffer_cmp, fw_buffer, WORK_SIZE) != 0)
+	{
+		iprintf("\n  >> VERIFY ERROR\n");
+		dumpBufferToFile("fw_work_buffer.bin", fw_work_buffer, WORK_SIZE);
+		dumpBufferToFile("fw_buffer.bin", fw_buffer + offset, WORK_SIZE);
+		WAIT_FOR_BUTTON_PRESS(KEY_A);
+		/* call svc 5 */
+		return -1;
+	}
+	iprintf("  >> OK!\n");
+	return 0;
+}
+
 void ClearScreen(void) { iprintf("\x1B[2J"); }
 inline void INIT(void) { consoleDemoInit(); }
 
@@ -244,22 +237,18 @@ int main(int argc, char ** argv)
 	if (key & KEY_B) return EXIT_FAILURE;
 	firmware_read(0, fw_buffer, FW_SIZE);
 
-	u32 address_to_dump = 0x001c5490;
-
 #if OK_TO_DO_SOME_POTENTIALLY_DANGEROUS_STUFF
 	memcpy(fw_buffer + 0x1FE00, patches1_bin, patches1_bin_len); /* UserSettings 1 */
 	*(u16*)(fw_buffer + 0x1FE70) = 0x51; /* update_counter UserSettings 1 */
 	*(u16*)(fw_buffer + 0x1FF70) = 0x52; /* update_counter UserSettings 2 */
 	*(u16*)(fw_buffer + 0x1FF50) = 0x6E; /* message_length UserSettings 2 */
 	memcpy(fw_buffer + 0x1FFB4, patches2, patches2_len); /* UserSettings 2 Not used area */
-	//*(u32*)(fw_buffer+0x1fe24) = address_to_dump;
 	/* PATCH CRC16s */
 	*(u16*)(fw_buffer + 0x1FE72) = swiCRC16(0xFFFF, fw_buffer+0x1FE00, 0x70); /* 00h - 6Fh (1) */
 	*(u16*)(fw_buffer + 0x1FEFE) = swiCRC16(0xFFFF, fw_buffer+0x1FE74, 0x8A); /* 74h - FDh (1) */
 	*(u16*)(fw_buffer + 0x1FF72) = swiCRC16(0xFFFF, fw_buffer+0x1FF00, 0x70); /* 00h - 6Fh (2) */
 	*(u16*)(fw_buffer + 0x1FFFE) = swiCRC16(0xFFFF, fw_buffer+0x1FF74, 0x8A); /* 74h - FDh (2) */
 	programming();
-	firmware_read(0, fw_buffer, FW_SIZE);
 	if (verifying() < 0)
 	{
 		return EXIT_FAILURE;
